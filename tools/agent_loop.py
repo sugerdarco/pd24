@@ -484,6 +484,27 @@ def validate_review(data: dict[str, Any], phase: str) -> None:
         raise LoopError("COMPLETE requires a dedicated approved final review and all checks")
 
 
+def reconcile_review(path: Path, decision: dict[str, Any]) -> bool:
+    """Repair only an omitted non-completion checklist from a validated decision.
+
+    Never infer values, overwrite a disagreement, or repair a completion claim.
+    Returns whether the documentary header was repaired; narrative is preserved.
+    """
+    header = markdown_data(path)
+    if header == decision:
+        return False
+    missing = set(decision) - set(header)
+    if (missing != {"completion_checks"} or set(header) - set(decision)
+            or decision["action"] == "COMPLETE"
+            or any(header[key] != decision[key] for key in header)):
+        raise LoopError("CODEX_REVIEW.md must match the structured decision")
+    text = path.read_text()
+    match = re.search(r"^```json\s*\n(.*?)\n```", text, re.M | re.S)
+    canonical = "```json\n" + json.dumps(decision, indent=2, sort_keys=True) + "\n```"
+    atomic_write(path, text[:match.start()] + canonical + text[match.end():])
+    return True
+
+
 def open_priorities(coord: Path) -> list[str]:
     return [line for line in (coord / "BACKLOG.md").read_text().splitlines()
             if re.match(r"\s*- \[ \] P[01]\b", line)]
@@ -606,8 +627,12 @@ class Orchestrator:
         self.guard()
         data = read_json(output)
         validate_review(data, phase)
-        if markdown_data(review) != data:
-            raise LoopError("CODEX_REVIEW.md must match the structured decision")
+        if reconcile_review(review, data):
+            write_json(run / f"codex-{phase}-protocol-repair.json", {
+                "at": now(), "field": "completion_checks",
+                "source": output.name,
+                "reason": "Copied omitted non-completion checklist from validated structured response; no values inferred",
+            })
         if self.state.pending_review and data["verdict"] == "INITIAL":
             raise LoopError("INITIAL cannot accept an existing worker attempt")
         if phase == "review" and data["task_id"] != self.state.current_task_id:

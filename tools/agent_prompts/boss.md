@@ -53,6 +53,11 @@ Problems, Research observations and Next direction. Include actual test commands
 and results. Final JSON must match the provided schema. verdict is INITIAL only
 before any worker attempt. action in plan: TASK/FINAL_REVIEW/BLOCKED; in review:
 CONTINUE/FINAL_REVIEW/BLOCKED; in final: COMPLETE/CONTINUE/BLOCKED.
+Include ALL schema fields in the Markdown JSON header, including completion_checks
+even during planning (use false for checks not established). If the preceding
+turn failed only on report formatting, reuse the still-valid prepared task and
+verified evidence after checking for intervening changes; do not repeat expensive
+diagnostics solely to regenerate the same plan.
 
 Hard boundaries: no changes to GOAL.md, state.json, config.json, run logs or lock
 files. No Git commits, pushes, resets, clean, deployment, sudo, production access,

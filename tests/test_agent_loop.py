@@ -183,6 +183,37 @@ class ProtocolTests(Fixture):
         with self.assertRaises(a.LoopError):
             a.validate_review(data, "final")
 
+    def test_repair_omitted_nonfinal_checklist_preserves_narrative(self):
+        data = review("TASK", "INITIAL")
+        header = {k: v for k, v in data.items() if k != "completion_checks"}
+        path = self.coord / "CODEX_REVIEW.md"
+        report(path, header)
+        a.validate_review(data, "plan")
+        self.assertTrue(a.reconcile_review(path, data))
+        self.assertEqual(a.markdown_data(path), data)
+        self.assertIn("Verified in test fixture.", path.read_text())
+        self.assertFalse(a.reconcile_review(path, data))
+
+    def test_review_repair_rejects_conflicts_and_missing_identity(self):
+        data = review()
+        path = self.coord / "CODEX_REVIEW.md"
+        for header in ({**data, "verdict": "REJECTED"},
+                       {k: v for k, v in data.items() if k != "task_id"},
+                       {**data, "unexpected": True}):
+            with self.subTest(header=header):
+                report(path, header)
+                original = path.read_bytes()
+                with self.assertRaises(a.LoopError):
+                    a.reconcile_review(path, data)
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_completion_report_checklist_cannot_be_repaired(self):
+        data = review("COMPLETE", complete=True)
+        report(self.coord / "CODEX_REVIEW.md", {k:v for k,v in data.items() if k != "completion_checks"})
+        a.validate_review(data, "final")
+        with self.assertRaises(a.LoopError):
+            a.reconcile_review(self.coord / "CODEX_REVIEW.md", data)
+
     def test_malformed_types_return_protocol_errors(self):
         for key in ("action", "verdict"):
             data = review()
@@ -296,6 +327,25 @@ class ProcessTests(Fixture):
 
 
 class LoopTests(Fixture):
+    def test_missing_planning_checklist_reaches_worker_and_is_audited(self):
+        self.fake_agents()
+        original_execute = a.execute
+        def omit_header(*args, **kwargs):
+            output = original_execute(*args, **kwargs)
+            argv = args[0]
+            log = args[4] if len(args) > 4 else kwargs.get("log")
+            if argv[0] == "codex" and log and log.name == "codex-plan":
+                path = self.coord / "CODEX_REVIEW.md"
+                data = a.markdown_data(path)
+                del data["completion_checks"]
+                report(path, data)
+            return output
+        with patch.object(a, "execute", side_effect=omit_header):
+            self.assertEqual(self.run_loop(), 0)
+        self.assertEqual(self.app.state.last_claude_status, "COMPLETE")
+        repairs = list((self.coord / "runs").glob("*/codex-plan-protocol-repair.json"))
+        self.assertEqual(len(repairs), 1)
+
     def test_one_cycle_has_post_worker_review(self):
         calls = self.fake_agents()
         self.assertEqual(self.run_loop(), 0)

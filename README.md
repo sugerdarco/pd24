@@ -157,6 +157,12 @@ inspect source/diff/history and execute tests, with an explicit
 `INITIAL|APPROVED|REJECTED|NEEDS_FOLLOWUP` verdict. New attempts use new task IDs and
 retain the same issue key for corrections.
 
+If a non-completion review's Markdown header omits only `completion_checks`, the
+orchestrator copies that field from the already schema-validated structured
+decision and logs the repair. All existing fields must agree exactly. Conflicting
+values, missing identity fields and incomplete COMPLETE reports still fail closed;
+no checklist value or acceptance verdict is inferred.
+
 Completion requires a **separate final Codex turn**, an approved review with all
 goal/functionality/tests/security/P0-P1/architecture/docs/runtime/assumptions/Git
 checks true, evidence, and no open P0/P1 backlog. The protocol validates the

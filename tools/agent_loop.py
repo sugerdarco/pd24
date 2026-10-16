@@ -88,6 +88,7 @@ class Config:
     timeout: int = 900
     max_consecutive_failures: int = 3
     max_corrections_per_task: int = 3
+    worker_python: str | None = None
 
     @classmethod
     def load(cls, path: Path) -> Config:
@@ -102,6 +103,8 @@ class Config:
                 raise LoopError(f"{key} must be a positive integer")
         if config.claude_session is not None:
             canonical_session(config.claude_session)
+        if config.worker_python is not None:
+            validate_worker_python(config.worker_python)
         return config
 
 
@@ -397,13 +400,24 @@ def boss_command(root: Path, schema: Path, output: Path) -> list[str]:
             "--output-last-message", str(output), "-"]
 
 
-def worker_command(session: str) -> list[str]:
+def validate_worker_python(value: str) -> str:
+    if (not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_./-]+", value)
+            or Path(value).is_absolute() or ".." in Path(value).parts
+            or "/" not in value):
+        raise SafetyError("worker_python must be a repository-relative interpreter path without shell syntax")
+    return value
+
+
+def worker_command(session: str, worker_python: str | None = None) -> list[str]:
+    allowed = "Read,Edit,Write,Bash(python3 -m unittest *)"
+    if worker_python is not None:
+        allowed += f",Bash({validate_worker_python(worker_python)} *)"
     return ["claude", "--resume", canonical_session(session), "--print", "--output-format", "json",
             "--permission-mode", "acceptEdits", "--permission-prompts", "none",
             "--restricted", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
             "--setting-sources", "", "--disable-slash-commands", "--no-chrome",
             "--tools", "Read,Edit,Write,Glob,Grep,Bash",
-            "--allowedTools", "Read,Edit,Write,Bash(python3 -m unittest *)",
+            "--allowedTools", allowed,
             "--settings", json.dumps({"disableAllHooks": True})]
 
 
@@ -552,6 +566,8 @@ class Orchestrator:
         for name in ("GOAL.md", "MEMORY.md", "ASSUMPTIONS.md", "BACKLOG.md", "RESEARCH.md"):
             if not (self.coord / name).is_file():
                 errors.append(f"Missing {name}")
+        if self.config.worker_python and not os.access(self.root / self.config.worker_python, os.X_OK):
+            errors.append(f"Configured worker interpreter is not executable: {self.config.worker_python}")
         try:
             self.coord.joinpath("runs").mkdir(exist_ok=True)
             with tempfile.TemporaryFile(dir=self.coord), tempfile.TemporaryFile(dir=self.coord / "runs"):
@@ -659,7 +675,7 @@ class Orchestrator:
         git_identity = self.git_identity()
         protected = self.protected_files(worker=True)
         try:
-            output = execute(worker_command(self.config.claude_session), self.root,
+            output = execute(worker_command(self.config.claude_session, self.config.worker_python), self.root,
                              self.limit("timeout"), text, run / "claude")
         except LoopError as exc:
             errfile = run / "claude.stderr.txt"
@@ -705,7 +721,7 @@ class Orchestrator:
                 raise SafetyError(self.state.blocker)
             if dry_run:
                 print(json.dumps({"rounds": rounds, "claude_session": self.config.claude_session,
-                                  "worker_argv": worker_command(self.config.claude_session),
+                                  "worker_argv": worker_command(self.config.claude_session, self.config.worker_python),
                                   "sequence": "Codex plan -> Claude -> Codex review -> optional final review"}, indent=2))
                 return 0
             if self.state.status == "COMPLETE":

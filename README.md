@@ -105,6 +105,13 @@ Locally inspected on 2026-10-17:
   that would prompt are denied and must be reported to Codex. This policy is
   deliberately project-specific, not an arbitrary shell allowlist.
 
+For another Python project, local `config.json` may set `worker_python` to a
+repository-relative interpreter such as `pd24/.venv/bin/python`. Preflight checks
+that it is executable. This adds permission to run that interpreter with arguments
+so Claude can execute the project's tests and bounded experiments. It executes
+repository Python code and is not an OS sandbox. Absolute paths, parent traversal
+and shell syntax are rejected. Leave it null for the default unittest-only policy.
+
 No permission bypass flags are used. Codex has workspace-write sandboxing and
 never asks for approval. Claude restricted mode confines file tools; **executing
 repository tests still executes repository code**, so CLI permissions are not an

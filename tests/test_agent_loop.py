@@ -238,6 +238,17 @@ class ProtocolTests(Fixture):
         self.assertIn('"task_id":"T-1"', worker)
         self.assertIn("Do not ask", worker)
 
+    def test_project_interpreter_policy_is_explicit_and_validated(self):
+        command = a.worker_command(self.session, "pd24/.venv/bin/python")
+        self.assertIn("Bash(pd24/.venv/bin/python *)", command[command.index("--allowedTools") + 1])
+        for value in ("/usr/bin/python", "../python", "python3", "venv/python;sudo", "venv/python *", []):
+            with self.subTest(value=value), self.assertRaises(a.SafetyError):
+                a.worker_command(self.session, value)
+        config = a.asdict(self.app.config)
+        config["worker_python"] = "pd24/.venv/bin/python"
+        a.write_json(self.coord / "config.json", config)
+        self.assertEqual(a.Config.load(self.coord / "config.json").worker_python, config["worker_python"])
+
     def test_goal_drift_and_symlink_guard(self):
         (self.coord / "GOAL.md").write_text("new goal")
         with self.assertRaises(a.SafetyError):

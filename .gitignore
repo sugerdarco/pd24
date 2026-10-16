@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.agents/runs/
+.agents/state.json
+.agents/config.json
+.agents/*.lock
+.agent-loop/runs/
+.agent-loop/state.json
+.agent-loop/config.json
+.agent-loop/*.lock

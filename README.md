@@ -154,8 +154,10 @@ every exact criterion to `PASS|FAIL|NOT_TESTED`, and a list of actual test comma
 and observed results. A fresh report is mandatory; the old one is archived before
 invocation. Claude COMPLETE is only a worker claim. Codex must independently
 inspect source/diff/history and execute tests, with an explicit
-`INITIAL|APPROVED|REJECTED|NEEDS_FOLLOWUP` verdict. New attempts use new task IDs and
-retain the same issue key for corrections.
+`INITIAL|APPROVED|REJECTED|NEEDS_FOLLOWUP` verdict. New tasks use new task IDs.
+Corrections may retain the current task ID with an explicit REJECTED or
+NEEDS_FOLLOWUP verdict, and must retain the same issue key. Each attempt still
+requires a fresh RESULT and counts toward the correction limit.
 
 If a non-completion review's Markdown header omits only `completion_checks`, the
 orchestrator copies that field from the already schema-validated structured

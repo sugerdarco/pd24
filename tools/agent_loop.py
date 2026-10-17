@@ -788,8 +788,9 @@ class Orchestrator:
                     if data["action"] != "TASK":
                         raise LoopError("Final review requires follow-up; replan next bounded attempt")
                     task = validate_task(self.coord / "TASK.md", data["task_id"])
-                    if task["task_id"] == self.state.current_task_id:
-                        raise LoopError("Every new attempt needs a fresh task ID; keep issue_key stable")
+                    if (task["task_id"] == self.state.current_task_id
+                            and data["verdict"] not in {"REJECTED", "NEEDS_FOLLOWUP"}):
+                        raise LoopError("Reusing a task ID requires an explicit corrective verdict; keep issue_key stable")
                     self.detect_loop(task, data)
                     self.state.current_task_id = task["task_id"]
                     atomic_write(run / "task.md", (self.coord / "TASK.md").read_text())

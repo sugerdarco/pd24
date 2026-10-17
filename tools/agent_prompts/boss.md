@@ -28,6 +28,9 @@ In plan phase: review any partial/unreviewed work first, then assign ONE coheren
 task. Write TASK.md with a fenced JSON header containing task_id, issue_key,
 objective, acceptance_criteria (nonempty list of unique strings). Keep issue_key
 stable across corrections for the same underlying problem. Follow with sections:
+For corrections to the current task, you may reuse its task_id only with a verdict
+of REJECTED or NEEDS_FOLLOWUP; the issue_key and correction budget remain stable.
+Use a fresh task_id for a new task. A completed task must not be replayed silently.
 Objective, Priority rationale, Context, Files, Requirements, Technical direction,
 Avoid, Tests required, Acceptance criteria, Assumptions, Research context.
 If repeated failures/oscillation are reported in state, explicitly diagnose the

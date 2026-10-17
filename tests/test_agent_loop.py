@@ -80,7 +80,7 @@ class Fixture(unittest.TestCase):
                 if behavior:
                     data = behavior("codex-" + phase, data, argv, log)
                 if phase == "plan" and data["action"] == "TASK":
-                    report(self.coord / "TASK.md", task(current_id))
+                    report(self.coord / "TASK.md", task(data["task_id"]))
                 report(self.coord / "CODEX_REVIEW.md", data)
                 a.write_json(Path(argv[argv.index("--output-last-message") + 1]), data)
                 return "{}"
@@ -455,6 +455,33 @@ class LoopTests(Fixture):
         self.assertEqual(self.run_loop(2), 0)
         self.assertEqual(calls.count("claude"), 2)
         self.assertEqual(self.app.state.consecutive_failures, 0)
+
+    def test_corrective_task_can_reuse_id_with_fresh_worker_result(self):
+        def behavior(kind, data, argv, log):
+            if kind == "codex-plan" and self.app.state.cycle == 2:
+                data["task_id"] = "T-1"
+                data["verdict"] = "NEEDS_FOLLOWUP"
+            elif kind == "codex-review":
+                data["task_id"] = "T-1"
+                if self.app.state.cycle == 1:
+                    data["verdict"] = "REJECTED"
+            return data
+        calls = self.fake_agents(behavior)
+        self.assertEqual(self.run_loop(2), 0)
+        self.assertEqual(calls.count("claude"), 2)
+        self.assertEqual(self.app.state.issue_attempts["bug"], 2)
+        self.assertEqual(self.app.state.consecutive_failures, 0)
+        self.assertTrue(list((self.coord / "runs").glob("00002-*/previous-result.md")))
+
+    def test_approved_task_cannot_silently_replay_same_id(self):
+        def behavior(kind, data, argv, log):
+            if kind == "codex-plan" and self.app.state.cycle == 2:
+                data["task_id"] = "T-1"
+            return data
+        calls = self.fake_agents(behavior)
+        self.assertEqual(self.run_loop(2), 1)
+        self.assertEqual(calls.count("claude"), 1)
+        self.assertIn("explicit corrective verdict", self.app.state.last_error)
 
     def test_loop_detection_requires_new_approach_and_bounds_corrections(self):
         self.app.state.fingerprints = ["same", "same"]
